@@ -150,7 +150,7 @@ public:
                 SetGhostsMode(GhostMode::Frightened, "../assets/blue_ghost.png");
             }
 
-            if (isPowerUpActive && powerUpClock.getElapsedTime().asSeconds() >= 7.0f) {
+            if (isPowerUpActive && powerUpClock.getElapsedTime().asSeconds() >= 17.0f) {
                 isPowerUpActive = false;
                 mPacmanInput->SetPowerUp(false);
                 ResetGhostsToNormalMode();

@@ -48,6 +48,9 @@ public:
     bool mHasBeenEaten = false;
     bool mInHouse = true;
 
+    Direction DetermineNewDirection();
+    void UpdateModeAndSpeed();
+
 private:
 
     GameEntityManager& mManager;
@@ -67,12 +70,13 @@ private:
     sf::Vector2f mPScatterTaret {32, 32}; // Top-left corner
     sf::Vector2f mIScatterTaret {32, 672}; // Bottom-right corner
     sf::Vector2f mCScatterTaret {514, 514};
-    sf::Vector2f mHomeBase {320, 320};// Bottom-left corner
+    sf::Vector2f mHomeBase {320, 352};// Bottom-left corner
 
 
     bool CheckSurroundingTiles(float x, float y, const Map& map);
-    Direction ChooseDirection();
-    bool CanMove(Direction direction);
+    //DELETE This funtion, it's not doing anything
+    /*Direction ChooseDirection();*/
+
     void Move(Direction direction);
     sf::Vector2f GetChaseTargetPosition();
     Direction GetBestDirection(float targetX, float targetY);

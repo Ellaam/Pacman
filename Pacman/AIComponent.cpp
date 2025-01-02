@@ -10,143 +10,18 @@ AIComponent::AIComponent(std::shared_ptr<GameEntity> gameEntity, Map& map, Ghost
 
 void AIComponent::Update() {
 
-    if (mMode == GhostMode::Eaten) {
-        mSpeedMultiplier = 2; 
-    }
-    else if (mMode == GhostMode::Frightened) {
-        mSpeedMultiplier = 1; 
-    }
-    else {
-        mSpeedMultiplier = 1; // Normal speed for other modes
-    }
-    mSpeed = mBaseSpeed * mSpeedMultiplier;
+    UpdateModeAndSpeed();
+    Direction newDirection = DetermineNewDirection();
+    Move(newDirection);
 
-    float deltaTime = 1.0f / 120.0f; 
-    mModeTimer += deltaTime;
-
-
-    // Handle mode transitions
-    if (mMode == GhostMode::InHouse && !IsInsideGhostHouse()) {
-        mMode = GhostMode::Scatter;
-        mModeTimer = 0.0f;
-    }
-    else if (mMode == GhostMode::Scatter && mModeTimer >= SCATTER_DURATION) {
-        mMode = GhostMode::Chase;
-        mModeTimer = 0.0f;
-    }
-    else if (mMode == GhostMode::Chase && mModeTimer >= CHASE_DURATION) {
-        mMode = GhostMode::Scatter;
-        mModeTimer = 0.0f;
-    }
-    else if (mMode == GhostMode::Frightened && mModeTimer >= FRIGHTENED_DURATION) {
-        mMode = GhostMode::Chase; // Return to Chase after Frightened
-        mModeTimer = 0.0f;
-    }
-    
-    // get the ghost's current position
-    auto entity = GetGameEntity();
-    auto tc = entity->GetComponent<TransformComponent>(ComponentType::TransformComponent);
-    auto currentPosition = tc->GetPosition();
-    // Update timers and handle mode transitions
-    
-    Direction newDirection;
-
-    // Update timers based on current mode
-    if (mMode == GhostMode::InHouse) {
-        newDirection = HandleInHouseMode(); 
-    }
-    else if (mMode == GhostMode::Scatter) {
-        auto scatterTarget = GetScatterTarget(); // Return the scatter target based on ghost type
-        newDirection = GetBestDirection(scatterTarget.x, scatterTarget.y);
-    }
-    else if (mMode == GhostMode::Frightened) {
-        newDirection = HandleFrightenedMode();
-    }
-    else if (mMode == GhostMode::Eaten) {
-        newDirection = HandleEatenMode();
-    }
-    else if (mMode == GhostMode::Chase) {
-        newDirection = HandleChaseMode();
-    }
-
-    // Check if the new direction is valid
-    bool canMove = false;
-    switch (newDirection) {
-    case Direction::Left:
-        canMove = !CheckSurroundingTiles(currentPosition.x - mSpeed, currentPosition.y, mMap);
-        break;
-    case Direction::Right:
-        canMove = !CheckSurroundingTiles(currentPosition.x + mSpeed, currentPosition.y, mMap);
-        break;
-    case Direction::Up:
-        canMove = !CheckSurroundingTiles(currentPosition.x, currentPosition.y - mSpeed, mMap);
-        break;
-    case Direction::Down:
-        canMove = !CheckSurroundingTiles(currentPosition.x, currentPosition.y + mSpeed, mMap);
-        break;
-    //case Direction::None:
-    //    break;
-    }
-
-    // Move in the new direction if possible
-    if (canMove) {
-        mCurrentDirection = newDirection;
-        switch (mCurrentDirection) {
-        case Direction::Left:
-            currentPosition.x -= mSpeed;
-            break;
-        case Direction::Right:
-            currentPosition.x += mSpeed;
-            break;
-        case Direction::Up:
-            currentPosition.y -= mSpeed;
-            break;
-        case Direction::Down:
-            currentPosition.y += mSpeed;
-            break;
-        //case Direction::None:
-        //    break;
-        }
-    }
-    else {
-
-        // If can't move in the new direction, try to continue in the current direction
-        canMove = !CheckSurroundingTiles(
-            currentPosition.x + (mCurrentDirection == Direction::Right ? mSpeed : (mCurrentDirection == Direction::Left ? -mSpeed : 0)),
-            currentPosition.y + (mCurrentDirection == Direction::Down ? mSpeed : (mCurrentDirection == Direction::Up ? -mSpeed : 0)),
-            mMap
-        );
-        if (canMove) {
-            switch (mCurrentDirection) {
-            case Direction::Left:
-                currentPosition.x -= mSpeed;
-                break;
-            case Direction::Right:
-                currentPosition.x += mSpeed; 
-                break;
-            case Direction::Up:
-                currentPosition.y -= mSpeed;
-                break;
-            case Direction::Down:
-                currentPosition.y += mSpeed;
-                break;
-            //case Direction::None:
-            //    break;
-            }
-        }
-    }
-
-    // Wrap-around boundaries
-    if (currentPosition.x < -mTileSize) {
-        currentPosition.x = 640 - mSpeed;
-    }
-    else if (currentPosition.x > 640) {
-        currentPosition.x = -mTileSize + mSpeed;
-    }
-
-    tc->SetPosition(currentPosition.x, currentPosition.y);
+    //// Wrap-around boundaries
+    //if (currentPosition.x < -mTileSize) {
+    //    currentPosition.x = 640 - mSpeed;
+    //}
+    //else if (currentPosition.x > 640) {
+    //    currentPosition.x = -mTileSize + mSpeed;
+    //}
 }
-
 
 void AIComponent::SetPlayerPosition(float x, float y) {
     mPlayerPositionX = x;
@@ -161,7 +36,7 @@ void AIComponent::SetGhostMode(GhostMode mode) {
         mSpeedMultiplier = 1; // Slow down in Frightened mode
     }
     else if (mode == GhostMode::Eaten) {
-        mSpeedMultiplier = 4; // Speed up in Eaten mode
+        mSpeedMultiplier = 2; // Speed up in Eaten mode
     }
     else {
         mSpeedMultiplier = 2; // Normal speed for other modes
@@ -177,7 +52,6 @@ sf::Vector2f AIComponent::GetScatterTarget() const {
     default: return sf::Vector2f(0, 0);
     }
 }
-
 
 sf::Vector2f AIComponent::GetChaseTargetPosition() {
 
@@ -257,39 +131,10 @@ sf::Vector2f AIComponent::GetChaseTargetPosition() {
 }
 
 Direction AIComponent::HandleChaseMode() {
-    //auto entity = GetGameEntity();
-    //auto tc = entity->GetComponent<TransformComponent>(ComponentType::TransformComponent);
-    //auto currentPosition = tc->GetPosition();
 
     auto targetTile = GetChaseTargetPosition();
     Direction bestDirection = GetBestDirection(targetTile.x, targetTile.y);
     
-    // DELETE THIS, AS the GETBESTDirection already takes care of it
-
-    //if (!CanMove(bestDirection)) {
-    //    std::vector<Direction> validDirections;
-    //    //Ghosts started shaking after starting i from 1 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-    //    for (int i = 0; i < 4; ++i) {
-    //        Direction dir = static_cast<Direction>(i);
-    //        if (CanMove(dir) && dir != ReverseDirection(mCurrentDirection)) {
-    //            validDirections.push_back(dir);
-    //        }
-    //    }
-    //    if (!validDirections.empty()) {
-    //        std::sort(validDirections.begin(), validDirections.end(),
-    //            [&](Direction a, Direction b) {
-    //                float aX, aY, bX, bY;
-    //                GetNextPosition(currentPosition.x, currentPosition.y, a, aX, aY);
-    //                GetNextPosition(currentPosition.x, currentPosition.y, b, bX, bY);
-    //                return DistanceSquared(aX, aY, targetTile.x, targetTile.y) <
-    //                    DistanceSquared(bX, bY, targetTile.x, targetTile.y);
-    //            });
-    //        bestDirection = validDirections[0];
-    //    }
-    //    else {
-    //        bestDirection = ReverseDirection(mCurrentDirection);
-    //    }
-    //}
     return bestDirection;
 }
 
@@ -298,8 +143,8 @@ Direction AIComponent::HandleEatenMode() {
     auto tc = entity->GetComponent<TransformComponent>(ComponentType::TransformComponent);
     auto currentPosition = tc->GetPosition();
 
+    // If ghost is near the home base, reset its state
     if (DistanceSquared(currentPosition.x, currentPosition.y, mHomeBase.x, mHomeBase.y) < mTileSize * mTileSize) {
-        // If ghost reaches home base, reset to InHouse mode
         mMode = GhostMode::InHouse;
         mEatenTimer = 0.0f;
         mHasBeenEaten = false;
@@ -313,35 +158,38 @@ Direction AIComponent::HandleEatenMode() {
         case GhostType::Clyde: sprite->UpdateSpriteComponent("../assets/clyde.png"); break;
         }
 
-        return Direction::Up; 
+        return Direction::Up;
     }
 
+    // Otherwise, move towards the home base deterministically
     return GetBestDirection(mHomeBase.x, mHomeBase.y);
-}  
+
+}
 
 Direction AIComponent::HandleFrightenedMode() {
+    auto entity = GetGameEntity();
+    auto tc = entity->GetComponent<TransformComponent>(ComponentType::TransformComponent);
+    auto currentPosition = tc->GetPosition();
 
-    //CAN BE REPLACED WITH THE CHOOSE DIRECTION FUNCTION - TO DO: REMOVE THE CODE BELOW AND REPLACE WITH THAT FUNCTION
-    // Get a random direction from valid choices
+    // Get possible directions
     std::vector<Direction> validDirections;
-    // Also i=0 causes shaking ++++++++++++++++++++++++++++++++++++++++++
     for (int i = 0; i < 4; ++i) {
         Direction dir = static_cast<Direction>(i);
-        if (CanMove(dir) && dir != ReverseDirection(mCurrentDirection)) {
+        if (!CheckSurroundingTiles(currentPosition.x, currentPosition.y, mMap) &&
+            dir != ReverseDirection(mCurrentDirection)) {
             validDirections.push_back(dir);
         }
     }
 
-    // If no valid direction, reverse
+    // If no valid directions, reverse
     if (validDirections.empty()) {
         return ReverseDirection(mCurrentDirection);
     }
 
-    // Choose randomly from valid directions
+    // Choose a random valid direction
     std::uniform_int_distribution<> dist(0, validDirections.size() - 1);
     return validDirections[dist(mRng)];
 }
-
 
 Direction AIComponent::HandleInHouseMode() {
     auto entity = GetGameEntity();
@@ -357,6 +205,22 @@ Direction AIComponent::HandleInHouseMode() {
         mModeTimer = 0.0f;
     }
     return GetBestDirection(exitPoint.x, exitPoint.y);
+}
+
+bool AIComponent::IsInsideGhostHouse() {
+    auto entity = GetGameEntity();
+    auto tc = entity->GetComponent<TransformComponent>(ComponentType::TransformComponent);
+    auto ic = entity->GetComponent<AIComponent>(ComponentType::AIComponent);
+    auto currentPosition = tc->GetPosition();
+
+    // Define the ghost house boundaries
+    int ghostHouseLeft = 256;
+    int ghostHouseRight = 352;
+    int ghostHouseTop = 256;
+    int ghostHouseBottom = 350;
+
+    return (currentPosition.x >= ghostHouseLeft && currentPosition.x <= ghostHouseRight &&
+        currentPosition.y >= ghostHouseTop && currentPosition.y <= ghostHouseBottom);
 }
 
 bool AIComponent::CheckSurroundingTiles(float x, float y, const Map& map) {
@@ -380,7 +244,7 @@ bool AIComponent::CheckSurroundingTiles(float x, float y, const Map& map) {
                 return true; // There is a wall
             }
             else if (map.GetTileTypeAt(xx, yy) == 4) { // Door tile
-                if (mMode == GhostMode::Eaten ||mMode == GhostMode::InHouse) {
+                if (mMode == GhostMode::Eaten ||mMode == GhostMode::InHouse || IsInsideGhostHouse()) {
                     return false; // Allow passage for Eaten mode or exiting the house
                 }
                 else {
@@ -392,103 +256,6 @@ bool AIComponent::CheckSurroundingTiles(float x, float y, const Map& map) {
     return false; // No wall found
 }
 
-bool AIComponent::IsInsideGhostHouse() {
-    auto entity = GetGameEntity();
-    auto tc = entity->GetComponent<TransformComponent>(ComponentType::TransformComponent);
-    auto ic = entity->GetComponent<AIComponent>(ComponentType::AIComponent);
-    auto currentPosition = tc->GetPosition();
-
-    // Define the ghost house boundaries
-    int ghostHouseLeft = 256;
-    int ghostHouseRight = 352;
-    int ghostHouseTop = 256;
-    int ghostHouseBottom = 352;
-
-    return (currentPosition.x >= ghostHouseLeft && currentPosition.x <= ghostHouseRight &&
-        currentPosition.y >= ghostHouseTop && currentPosition.y <= ghostHouseBottom);
-}
-
-Direction AIComponent::ChooseDirection() {
-
-    std::vector<Direction> possibleDirections;
-
-    // Check all 4 possible directions
-    for (int i = 0; i < 4; ++i) {
-        Direction dir = static_cast<Direction>(i);
-        if (CanMove(dir) && dir != ReverseDirection(mCurrentDirection)) {
-            possibleDirections.push_back(dir);
-        }
-    }
-
-    // If no possible directions are available, the ghost can reverse direction or choose randomly
-    if (possibleDirections.empty()) {
-        return ReverseDirection(mCurrentDirection);
-    }
-
-    // Randomly choose from possible directions
-    std::uniform_int_distribution<> dist(0, possibleDirections.size() - 1);
-    return possibleDirections[dist(mRng)];
-}
-
-bool AIComponent::CanMove(Direction direction) {
-
-    auto entity = GetGameEntity();
-    auto tc = entity->GetComponent<TransformComponent>(ComponentType::TransformComponent);
-    auto currentPosition = tc->GetPosition();
-
-    float nextX = currentPosition.x;
-    float nextY = currentPosition.y;
-
-    // Calculate the next position based on the direction
-    switch (direction) {
-    case Direction::Up:    nextY -= mTileSize; break;
-    case Direction::Down:  nextY += mTileSize; break;
-    case Direction::Left:  nextX -= mTileSize; break;
-    case Direction::Right: nextX += mTileSize; break;
-    default: break;
-    }
-
-    // Check if the new position is out of bounds
-    if (nextX < 0 || nextY < 0 || nextX >= 20 * mTileSize || nextY >= 22 * mTileSize) {
-        return false; 
-    }
-
-    // Convert nextX, nextY to tile-based coordinates
-    int tileX = static_cast<int>(std::floor(nextX / mTileSize));
-    int tileY = static_cast<int>(std::floor(nextY / mTileSize));
-
-
-    // Check the tile type (1 is wall)
-    return mMap.GetTileTypeAt(tileX, tileY) != 1;
-}
-
-void AIComponent::Move(Direction direction) {
-    auto entity = GetGameEntity();
-    auto tc = entity->GetComponent<TransformComponent>(ComponentType::TransformComponent);
-    auto currentPosition = tc->GetPosition();
-
-    bool hasMoved = false;
-
-    // Try to move in the new direction
-    if (CanMove(direction)) {
-        switch (direction) {
-        case Direction::Up: currentPosition.y -= mSpeed; hasMoved = true; break;
-        case Direction::Down: currentPosition.y += mSpeed; hasMoved = true; break;
-        case Direction::Left: currentPosition.x -= mSpeed; hasMoved = true; break;
-        case Direction::Right: currentPosition.x += mSpeed; hasMoved = true; break;
-        default: break;
-        }
-    }
-
-    // Align the position to the tile center after movement
-    if (hasMoved) {
-        /*currentPosition.x = std::round(currentPosition.x / mTileSize) * mTileSize;
-        currentPosition.y = std::round(currentPosition.y / mTileSize) * mTileSize;*/
-
-        tc->SetPosition(currentPosition.x, currentPosition.y);
-    }
-}
-
 Direction AIComponent::GetBestDirection(float targetX, float targetY) {
     auto entity = GetGameEntity();
     auto tc = entity->GetComponent<TransformComponent>(ComponentType::TransformComponent);
@@ -497,7 +264,17 @@ Direction AIComponent::GetBestDirection(float targetX, float targetY) {
     std::vector<Direction> possibleDirections;
     for (int i = 0; i < 4; ++i) {
         Direction dir = static_cast<Direction>(i);
-        if (CanMove(dir) && dir != ReverseDirection(mCurrentDirection)) {
+        float nextX = currentPosition.x;
+        float nextY = currentPosition.y;
+
+        switch (dir) {
+        case Direction::Up:    nextY -= mSpeed * mSpeedMultiplier; break;
+        case Direction::Down:  nextY += mSpeed * mSpeedMultiplier; break;
+        case Direction::Left:  nextX -= mSpeed * mSpeedMultiplier; break;
+        case Direction::Right: nextX += mSpeed * mSpeedMultiplier; break;
+        }
+
+        if (!CheckSurroundingTiles(nextX, nextY, mMap) && dir != ReverseDirection(mCurrentDirection)) {
             possibleDirections.push_back(dir);
         }
     }
@@ -516,23 +293,99 @@ Direction AIComponent::GetBestDirection(float targetX, float targetY) {
         });
 }
 
+
+void AIComponent::Move(Direction direction) {
+    auto entity = GetGameEntity();
+    auto tc = entity->GetComponent<TransformComponent>(ComponentType::TransformComponent);
+    auto currentPosition = tc->GetPosition();
+
+    float nextX = currentPosition.x;
+    float nextY = currentPosition.y;
+
+    // Compute the next position based on direction
+    switch (direction) {
+    case Direction::Up:    nextY -= mSpeed * mSpeedMultiplier; break;
+    case Direction::Down:  nextY += mSpeed * mSpeedMultiplier; break;
+    case Direction::Left:  nextX -= mSpeed * mSpeedMultiplier; break;
+    case Direction::Right: nextX += mSpeed * mSpeedMultiplier; break;
+    }
+
+    // Check if the target position is valid and move there
+    if (!CheckSurroundingTiles(nextX, nextY, mMap)) {
+        currentPosition.x = nextX;
+        currentPosition.y = nextY;
+        mCurrentDirection = direction;
+        tc->SetPosition(currentPosition.x, currentPosition.y);
+    }
+
+    
+}
+
+
+void AIComponent::UpdateModeAndSpeed() {
+    // Update mode timers and transitions
+    // Update speed multiplier based on mode
+    if (mMode == GhostMode::Eaten) {
+        mSpeedMultiplier = 2;
+    }
+    else if (mMode == GhostMode::Frightened) {
+        mSpeedMultiplier = 1;
+    }
+    else {
+        mSpeedMultiplier = 1; // Normal speed for other modes
+    }
+    mSpeed = mBaseSpeed * mSpeedMultiplier;
+
+    float deltaTime = 1.0f / 120.0f;
+    mModeTimer += deltaTime;
+
+    // Handle mode transitions
+    if (mMode == GhostMode::InHouse && !IsInsideGhostHouse()) {
+        mMode = GhostMode::Scatter;
+        mModeTimer = 0.0f;
+    }
+    else if (mMode == GhostMode::Scatter && mModeTimer >= SCATTER_DURATION) {
+        mMode = GhostMode::Chase;
+        mModeTimer = 0.0f;
+    }
+    else if (mMode == GhostMode::Chase && mModeTimer >= CHASE_DURATION) {
+        mMode = GhostMode::Scatter;
+        mModeTimer = 0.0f;
+    }
+    else if (mMode == GhostMode::Frightened && mModeTimer >= FRIGHTENED_DURATION) {
+        mMode = GhostMode::Chase; // Return to Chase after Frightened
+        mModeTimer = 0.0f;
+    }
+}
+
+Direction AIComponent::DetermineNewDirection() {
+    switch (mMode) {
+    case GhostMode::InHouse: return HandleInHouseMode();
+    case GhostMode::Scatter: return GetBestDirection(GetScatterTarget().x, GetScatterTarget().y);
+    case GhostMode::Frightened: return HandleFrightenedMode();
+    case GhostMode::Eaten: return HandleEatenMode();
+    case GhostMode::Chase: return HandleChaseMode();
+    //default: return mCurrentDirection;
+    }
+}
+
+void AIComponent::GetNextPosition(float currentX, float currentY, Direction dir, float& outX, float& outY) {
+    switch (dir) {
+    case Direction::Up:    outX = currentX; outY = currentY - (mSpeed * mSpeedMultiplier); break;
+    case Direction::Down:  outX = currentX; outY = currentY + (mSpeed * mSpeedMultiplier); break;
+    case Direction::Left:  outX = currentX - (mSpeed * mSpeedMultiplier); outY = currentY; break;
+    case Direction::Right: outX = currentX + (mSpeed * mSpeedMultiplier); outY = currentY; break;
+    default: outX = currentX; outY = currentY; break;
+    }
+}
+
 Direction AIComponent::ReverseDirection(Direction dir) {
     switch (dir) {
     case Direction::Up: return Direction::Down;
     case Direction::Down: return Direction::Up;
     case Direction::Left: return Direction::Right;
     case Direction::Right: return Direction::Left;
- /*   default: return Direction::None;*/
-    }
-}
-
-void AIComponent::GetNextPosition(float currentX, float currentY, Direction dir, float& outX, float& outY) {
-    switch (dir) {
-    case Direction::Up:    outX = currentX; outY = currentY - mTileSize; break;
-    case Direction::Down:  outX = currentX; outY = currentY + mTileSize; break;
-    case Direction::Left:  outX = currentX - mTileSize; outY = currentY; break;
-    case Direction::Right: outX = currentX + mTileSize; outY = currentY; break;
-    default: outX = currentX; outY = currentY; break;
+        /*   default: return Direction::None;*/
     }
 }
 
