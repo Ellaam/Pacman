@@ -12,6 +12,7 @@
 #include <vector>
 
 class Application {
+
 public:
     Application() : mMap(32, 20, 22), mManager(mMap) {
         InitializeGame();
@@ -107,7 +108,7 @@ public:
     }
 
     void Loop(float targetFPS) {
-        sf::RenderWindow window(sf::VideoMode(640, 850), "Pac-Man");
+        sf::RenderWindow window(sf::VideoMode(640, 800), "Pac-Man");
         const sf::Time frameTime = sf::seconds(1.0f / targetFPS);
         sf::Clock clock;
         sf::Clock fpsClock;
@@ -137,24 +138,56 @@ public:
                 mGameOverClock.restart();
                 UpdateWinDisplay();
             }
+
             if (mGameOverSequence) {
                 if (mGameOverClock.getElapsedTime().asSeconds() >= 2.0f) {
                     mGameOn = false;
                 }
-
             }
+
             // Power-up logic
             if (mPacmanInput->IsPowerUp() && !isPowerUpActive) {
                 isPowerUpActive = true;
                 powerUpClock.restart();
-                SetGhostsMode(GhostMode::Frightened, "../assets/blue_ghost.png");
+
+                for (auto& ghost : mGhosts) {
+                    
+                    auto ai = ghost->GetComponent<AIComponent>(ComponentType::AIComponent);
+                    auto ghostSprite = ghost->GetComponent<SpriteComponent>(ComponentType::SpriteComponent);
+               
+                    ai->SetGhostMode(GhostMode::Frightened);
+                    ghostSprite->UpdateSpriteComponent("../assets/blue_ghost.png");
+                                      
+                }
             }
 
-            if (isPowerUpActive && powerUpClock.getElapsedTime().asSeconds() >= 17.0f) {
+            for (auto& ghost : mGhosts) {
+
+                auto ai = ghost->GetComponent<AIComponent>(ComponentType::AIComponent);
+                auto ghostSprite = ghost->GetComponent<SpriteComponent>(ComponentType::SpriteComponent);
+                if (mPacmanInput->IsPowerUp() && isPowerUpActive && ai->GetMode() == GhostMode::InHouse) {
+                    if (ai->GetGhostType() == GhostType::Blinky) {
+                        ghostSprite->UpdateSpriteComponent("../assets/blinky.png");
+                    }
+                    else if (ai->GetGhostType() == GhostType::Inky) {
+                        ghostSprite->UpdateSpriteComponent("../assets/inky.png");
+                    }
+                    else if (ai->GetGhostType() == GhostType::Pinky) {
+                        ghostSprite->UpdateSpriteComponent("../assets/pinky.png");
+                    }
+                    else {
+                        ghostSprite->UpdateSpriteComponent("../assets/clyde.png");
+                    }
+                }
+            }
+
+
+            if (isPowerUpActive && powerUpClock.getElapsedTime().asSeconds() >= 7.0f ) {
                 isPowerUpActive = false;
                 mPacmanInput->SetPowerUp(false);
                 ResetGhostsToNormalMode();
             }
+
             if (!mFreezeState) {
                 // Normal game update logic
                 mPacman->Input();
@@ -202,13 +235,13 @@ public:
     }
 
 private:
+
     void InitializeGhost(GhostType type, const std::string& spritePath, sf::Vector2f position, sf::Vector2f scale, GhostMode mode) {
         auto ghost = GameEntity::Create();
         auto tc = std::make_shared<TransformComponent>(ghost, ShapeType::Circle);
         auto sc = std::make_shared<SpriteComponent>(ghost);
         auto cc = std::make_shared<CollisionComponent>(ghost, ShapeType::Circle);
         auto ai = std::make_shared<AIComponent>(ghost, mMap, type, mManager);
-
 
         tc->SetCircleRadius(15.f);
         cc->SetCircleRadius(15.f);
@@ -225,22 +258,12 @@ private:
         mManager.AddGhost(ghost);
     }
 
-    void SetGhostsMode(GhostMode mode, const std::string& spritePath) {
-        for (auto& ghost : mGhosts) {
-            auto ai = ghost->GetComponent<AIComponent>(ComponentType::AIComponent);
-            ai->SetGhostMode(mode);
-            auto sprite = ghost->GetComponent<SpriteComponent>(ComponentType::SpriteComponent);
-            sprite->UpdateSpriteComponent(spritePath);
-        }
-    }
-
     void ResetGhostsToNormalMode() {
         for (auto& ghost : mGhosts) {
             auto ai = ghost->GetComponent<AIComponent>(ComponentType::AIComponent);
             ai->SetGhostMode(GhostMode::Chase);
             ai->mHasBeenEaten = false;
             // Update sprite paths based on ghost type
-            auto sprite = ghost->GetComponent<SpriteComponent>(ComponentType::SpriteComponent);
             auto ghostSprite = ghost->GetComponent<SpriteComponent>(ComponentType::SpriteComponent);
             if (ai->GetGhostType() == GhostType::Blinky) {
                 ghostSprite->UpdateSpriteComponent("../assets/blinky.png");
@@ -254,7 +277,6 @@ private:
             else {
                 ghostSprite->UpdateSpriteComponent("../assets/clyde.png");
             }
-
         }
     }
 
@@ -264,12 +286,10 @@ private:
 
         for (auto& ghost : mGhosts) {
             auto aiComponent = ghost->GetComponent<AIComponent>(ComponentType::AIComponent);
-            aiComponent->SetPlayerPosition(pacmanPosition.x, pacmanPosition.y);
 
             if (mPacman->CheckCollision(*ghost)) {
                 if (isPowerUpActive) {
                     if (!aiComponent->mHasBeenEaten) {
-                        auto ghostTC = ghost->GetComponent<TransformComponent>(ComponentType::TransformComponent);
                         auto ghostSprite = ghost->GetComponent<SpriteComponent>(ComponentType::SpriteComponent);
                         // Set only this ghost to Eaten mode
                         aiComponent->SetGhostMode(GhostMode::Eaten);
@@ -301,20 +321,22 @@ private:
                         // Reset ghosts' positions
                         for (auto& ghost : mGhosts) {
                             auto aiComponent = ghost->GetComponent<AIComponent>(ComponentType::AIComponent);
+                            auto tcComponent = ghost->GetComponent<TransformComponent>(ComponentType::TransformComponent);
+
                             if (aiComponent->GetGhostType() == GhostType::Blinky) {
-                                ghost->GetComponent<TransformComponent>(ComponentType::TransformComponent)->SetPosition(32, 32);
+                                tcComponent->SetPosition(32, 32);
                                 aiComponent->SetGhostMode(GhostMode::Chase);
                             }
                             if (aiComponent->GetGhostType() == GhostType::Pinky) {
-                                ghost->GetComponent<TransformComponent>(ComponentType::TransformComponent)->SetPosition(288, 320);
+                                tcComponent->SetPosition(288, 320);
                                 aiComponent->SetGhostMode(GhostMode::InHouse);
                             }
                             if (aiComponent->GetGhostType() == GhostType::Inky) {
-                                ghost->GetComponent<TransformComponent>(ComponentType::TransformComponent)->SetPosition(320, 320);
+                                tcComponent->SetPosition(320, 320);
                                 aiComponent->SetGhostMode(GhostMode::InHouse);
                             }
                             if (aiComponent->GetGhostType() == GhostType::Clyde) {
-                                ghost->GetComponent<TransformComponent>(ComponentType::TransformComponent)->SetPosition(352, 320);
+                                tcComponent->SetPosition(352, 320);
                                 aiComponent->SetGhostMode(GhostMode::InHouse);
                             }
                         }
@@ -329,6 +351,7 @@ private:
             }
         }
     }
+
     void UpdateScoreDisplay() {
         int currentScore = mPacmanInput->GetScore();
         mScoreText.setString("Score: " + std::to_string(currentScore));

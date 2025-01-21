@@ -22,9 +22,6 @@ public:
 
     ComponentType GetType() override { return ComponentType::AIComponent; }
 
-    // Why do I even have this in here? this shouldn't be possible
-    void SetPlayerPosition(float x, float y);
-
     // Setters and Getters for state
     void SetGhostMode(GhostMode mode);
     GhostMode GetMode() const { return mMode; }
@@ -52,6 +49,9 @@ public:
     void UpdateModeAndSpeed();
 
 private:
+    unsigned char mFrameCounter { 0 };
+    bool mIsInHouse = true;
+
 
     GameEntityManager& mManager;
     int mSpeed{ 1 };
@@ -90,6 +90,5 @@ private:
 
     const float SCATTER_DURATION = 7.0f; // Scatter mode duration (in seconds)
     const float CHASE_DURATION = 20.0f; // Chase mode duration (in seconds)
-    const float FRIGHTENED_DURATION = 5.0f; // Frightened mode duration (in seconds)
+    const float FRIGHTENED_DURATION = 7.0f; // Frightened mode duration (in seconds)
 };
-
